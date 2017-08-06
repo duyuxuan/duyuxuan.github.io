@@ -1,0 +1,510 @@
+Sub Opiona2()
+
+'On Error Resume Next    '// 发生错误，自动执行下一句，就是忽略错误
+Application.ScreenUpdating = False '//关闭屏幕刷新
+Application.DisplayAlerts = False '//关闭系统提示
+t = Timer   '//开始时间
+    Rem 在A列已经知道要那些文件的行数
+    Set SH0 = Sheets("统计")
+    FileArr = FileAllArr(ThisWorkbook.Path, "*.xls?", ThisWorkbook.Name, True, False)
+    For IROW = 3 To SH0.Range("A65536").End(3).Row - 1
+        For I = 0 To UBound(FileArr)
+            If GetPathFromFileName(FileArr(I)) = SH0.Cells(IROW, 1) Then
+                Str_coon = "HDR=yes;imex=1';Data Source =" & FileArr(I)    '//OFFICE2003，2007 通用
+                StrSQL = "SELECT COUNT(运单号) AS 个数 FROM [export$a:a] WHERE LEN(运单号)>0"
+                SQLARR = GET_SQL_To_Arr(StrSQL, Str_coon, False)
+                SH0.Cells(IROW, 2) = SQLARR(0, 0)
+                Exit For
+            End If
+        Next I
+    Next IROW
+    
+Application.ScreenUpdating = True '//恢复屏幕刷新
+Application.DisplayAlerts = True '//恢复系统提示
+MsgBox "一共用时：" & Format(Timer - t, "#0.0000") & " 秒", , "提示!!"  '//提示所用时间
+End Sub
+
+
+Sub Opiona()
+
+'On Error Resume Next    '// 发生错误，自动执行下一句，就是忽略错误
+Application.ScreenUpdating = False '//关闭屏幕刷新
+Application.DisplayAlerts = False '//关闭系统提示
+t = Timer   '//开始时间
+
+    Set SH0 = Sheets("统计")
+    Rem 在A列什么都没有，需要全部文件的行数
+    SH0.Range("A3:B65536").ClearContents
+    INTX = 0
+    FileArr = FileAllArr(ThisWorkbook.Path, "*.xls?", ThisWorkbook.Name, True, False)
+    For I = 0 To UBound(FileArr)
+    
+        Str_coon = "HDR=yes;imex=1';Data Source =" & FileArr(I)    '//OFFICE2003，2007 通用
+        StrSQL = "SELECT COUNT(运单号) AS 个数 FROM [export$a:a] WHERE LEN(运单号)>0"
+        SQLARR = GET_SQL_To_Arr(StrSQL, Str_coon, False)
+        SH0.Cells(I + 3, 1) = GetPathFromFileName(FileArr(I))
+        SH0.Cells(I + 3, 2) = SQLARR(0, 0)
+        INTX = INTX + SQLARR(0, 0)
+    Next I
+    LASTROW = SH0.Range("B65536").End(3).Row + 1
+    SH0.Cells(LASTROW, 1) = "合计"
+    SH0.Cells(LASTROW, 2) = INTX
+    
+Application.ScreenUpdating = True '//恢复屏幕刷新
+Application.DisplayAlerts = True '//恢复系统提示
+MsgBox "一共用时：" & Format(Timer - t, "#0.0000") & " 秒", , "北极狐提示!!"  '//提示所用时间
+End Sub
+
+
+'*****************************************************************************************
+'函数名：    GET_SQL_To_Arr
+'函数功能：  获得指定SQL的查询结果，自定义连接字符串，可以连接各种数据库
+'返回值：    返回一个二维数组
+'参数1：     StrSQL   字符类型   SQL查询语句
+'参数2：     Str_coon 字符类型   数据库连接语句
+            'Str_coon = "Provider=Microsoft.JET.OLEDB.4.0;Extended Properties='Excel 8.0;HDR=yes';Data Source=" & ThisWorkbook.FullName      '//OFFICE2003
+            'Str_coon = "Provider=Microsoft.ACE.OLEDB.12.0;Extended Properties='Excel 12.0;HDR=yes';Data Source =" & ThisWorkbook.FullName     '//OFFICE2007
+            'Str_coon = "HDR=yes';Data Source =" & FileArr(i)    '//OFFICE2003，2007 通用
+'参数3：     Biaoti   可参数选   是否输出标题，默认带有标题
+'使用方法：
+'            SQLARR= GET_SQL_To_Arr(StrSQL,Str_coon,true)
+'            SQLARR(0,1)  '//数组第一行为标题行，从i=1 开始是数据
+'            Sh2.Range("A2").Resize(UBound(SQLARR, 1) + 1, UBound(SQLARR, 2) + 1) = SQLARR
+'*****************************************************************************************
+Public Function GET_SQL_To_Arr(ByVal StrSQL As String, ByVal Str_coon As String, Optional Biaoti As Boolean = True) As Variant()
+    'On Error Resume Next    ' 改变错误处理的方式。
+    Dim CN, RS
+    Dim arr()
+    Dim I As Long
+    
+    Err.Clear
+    Set CN = CreateObject("Adodb.Connection") '//新建一个ADO连接
+    Set RS = CreateObject("adodb.recordset")
+    Rem Str_coon = "HDR=yes';Data Source=" & ThisWorkbook.FullName
+    If InStr(Str_coon, "Provider=") = 0 Then
+        If Val(Application.Version * 1) < 12 Then
+           Str_coon = "Provider=Microsoft.Jet.OLEDB.4.0;Extended Properties='Excel 8.0;" & Str_coon
+        Else
+          Str_coon = "Provider=Microsoft.ACE.OLEDB.12.0;Extended Properties='Excel 12.0;" & Str_coon
+        End If
+    End If
+    CN.CursorLocation = 3
+    CN.Open Str_coon
+    RS.Open StrSQL, CN, 1, 3
+    Rem SET RS=CN.Execute(StrSQL)
+
+    If RS.RecordCount > 0 Then '//如果找到数据
+         If Biaoti = True Then
+              ReDim arr(0 To RS.RecordCount, 0 To RS.Fields.Count - 1)
+                  For a = 0 To RS.Fields.Count - 1  '//导入标题
+                     arr(0, a) = RS.Fields(a).Name
+                  Next
+              For I = 0 To RS.RecordCount - 1  '//导入数据
+                  For a = 0 To RS.Fields.Count - 1
+                      arr(I + 1, a) = RS.Fields(a).Value
+                  Next a
+                  RS.MoveNext
+              Next
+         Else
+              ReDim arr(0 To RS.RecordCount - 1, 0 To RS.Fields.Count - 1)
+              For I = 0 To RS.RecordCount - 1  '//导入数据
+                  For a = 0 To RS.Fields.Count - 1
+                      arr(I, a) = RS.Fields(a).Value
+                  Next a
+                  RS.MoveNext
+              Next
+         End If
+     Else '//如果没有找到数据
+         If Biaoti = True Then
+              ReDim arr(0 To 0, 0 To RS.Fields.Count - 1)
+                  For a = 0 To RS.Fields.Count - 1  '//导入标题
+                     arr(0, a) = RS.Fields(a).Name
+                  Next
+         Else
+             ReDim arr(1, 1)
+             arr(0, 0) = ""
+         End If
+    End If
+    
+    If Err.Number <> 0 Then
+        MsgBox "出错了！"
+        ReDim arr(1, 1)
+        arr(0, 0) = "出错了"
+        GET_SQL_To_Arr = arr(0, 0)
+    End If
+    
+    GET_SQL_To_Arr = arr
+    
+    RS.Close
+    CN.Close  '//关闭ADO连接
+    Set RS = Nothing
+    Set CN = Nothing  '//释放内存
+End Function
+
+'*******************************************************************************************************
+'功能：    查找指定文件夹含子文件夹内所有文件名或文件夹名（含路径）
+'函数名：  FileAllArr
+'参数1：   Filename    需查找的文件夹名，不包含文件名
+'参数2：   FileFilter  需要过滤的文件名，可省略，默认为：[*.*]
+'参数3：   Liwai       剔除例外的文件名，可省略，默认为：空，一般为：ThisWorkbook.Name
+'参数4：   SubFiles    是否需要查找子文件夹内文件，可省略，默认为：true
+'参数5：   Files       是否只要文件夹名，可省略，默认为：FALSE
+'返回值：  一个字符型的数组
+'使用方法：FileArr = FileAllArr(ThisWorkbook.Path, "*.xls", ThisWorkbook.Name,false,false)
+'*******************************************************************************************************
+Public Function FileAllArr(ByVal Filename As String, Optional ByVal FileFilter As String = "*.*", Optional ByVal Liwai As String = "", Optional ByVal SubFiles As Boolean = True, Optional ByVal Files As Boolean = False) As String()
+    
+    Dim DIC, DID, Ke, MyName, MyFileName
+    Dim I As Integer
+    
+    Set DIC = CreateObject("Scripting.Dictionary")    '创建一个字典对象
+    Set DID = CreateObject("Scripting.Dictionary")
+    
+    Filename = Replace(Replace(Filename & "\", "\\", "\"), "\\", "\")
+    DIC.Add (Filename), ""
+    I = 0
+    Do While I < DIC.Count
+        Ke = DIC.keys   '开始遍历字典
+        If SubFiles = True Then  '//如果需要查找子文件夹
+            MyName = Dir(Ke(I), vbDirectory)    '查找目录
+            Do While MyName <> ""
+                If MyName <> "." And MyName <> ".." Then
+                    If (GetAttr(Ke(I) & MyName) And vbDirectory) = vbDirectory Then    '如果是次级目录
+                        DIC.Add (Ke(I) & MyName & "\"), ""  '就往字典中添加这个次级目录名作为一个条目
+                    End If
+                End If
+                MyName = Dir    '继续遍历寻找
+            Loop
+        End If
+        I = I + 1
+    Loop
+    Dim arrx() As String
+    I = 0
+    If Files = True Then   '//是否只输出文件夹名
+       
+        For Each Ke In DIC.keys '以查找总表所在文件夹下所有excel文件为例
+            ReDim Preserve arrx(I)
+            If Ke <> Filename Then   '//自身文件夹除外
+                arrx(I) = Ke
+                I = I + 1
+            End If
+         Next
+         FileAllArr = arrx
+    Else
+        For Each Ke In DIC.keys '以查找总表所在文件夹下所有excel文件为例
+            MyFileName = Dir(Ke & FileFilter) '过滤器：EXCEL2003为：*.xls,excel2007为：*.xlsx
+            Do While MyFileName <> ""
+               If MyFileName <> Liwai Then '排除例外文件
+                  ReDim Preserve arrx(I)
+                  arrx(I) = Ke & MyFileName
+                  I = I + 1
+               End If
+                MyFileName = Dir
+            Loop
+        Next
+        FileAllArr = arrx
+    End If
+End Function
+
+
+
+'*'****************************************************************************************************
+'函数:   GetPathFromFileName   根据全路径获得文件名
+'参数1： strFullPath  完整路径
+'参数2： kzm  true 返回字符串含扩展名,默认是：False
+'参数3： strSplitor  各级文件夹分隔符
+'作用:  从完整路径获取返回:  文件名(true带扩展名)
+'使用方法:  msgbox GetPathFromFileName("C:\windows\text.txt",true)
+'*'****************************************************************************************************
+Public Function GetPathFromFileName(ByVal strFullPath As String, Optional ByVal kzm As Boolean = False, Optional ByVal strSplitor As String = "\") As String
+    Dim FileName1 As String
+    Dim FNAME As String
+    FileName1 = Left$(strFullPath, InStrRev(strFullPath, strSplitor, , vbTextCompare))
+    FileName1 = Replace(strFullPath, FileName1, "")
+    If kzm = False Then
+        GetPathFromFileName = Left(FileName1, InStrRev(FileName1, ".") - 1)
+    Else
+        GetPathFromFileName = FileName1
+    End If
+End Function
+
+
+'*********************************
+'*******  北极狐工作室出品  ******
+'*******  QQ：14885553      ******
+'*********************************
+
+Sub Opiona()
+
+'On Error Resume Next    '// 发生错误，自动执行下一句，就是忽略错误
+Application.ScreenUpdating = False '//关闭屏幕刷新
+Application.DisplayAlerts = False '//关闭系统提示
+t = Timer   '//开始时间
+
+    Set SH0 = Sheets("统计")
+    Rem 在A列什么都没有，需要全部文件的行数
+    SH0.Range("A3:B65536").ClearContents
+    INTX = 0
+    FileArr = FileAllArr(ThisWorkbook.Path, "*.xls?", ThisWorkbook.Name, True, False)
+    For I = 0 To UBound(FileArr)
+    
+        Str_coon = "HDR=yes;imex=1';Data Source =" & FileArr(I)    '//OFFICE2003，2007 通用
+        StrSQL = "SELECT COUNT(运单号) AS 个数 FROM [export$a:a] WHERE LEN(运单号)>0"
+        SQLARR = GET_SQL_To_Arr(StrSQL, Str_coon, False)
+        SH0.Cells(I + 3, 1) = GetPathFromFileName(FileArr(I))
+        SH0.Cells(I + 3, 2) = SQLARR(0, 0)
+        INTX = INTX + SQLARR(0, 0)
+    Next I
+    LASTROW = SH0.Range("B65536").End(3).Row + 1
+    SH0.Cells(LASTROW, 1) = "合计"
+    SH0.Cells(LASTROW, 2) = INTX
+    
+Application.ScreenUpdating = True '//恢复屏幕刷新
+Application.DisplayAlerts = True '//恢复系统提示
+MsgBox "一共用时：" & Format(Timer - t, "#0.0000") & " 秒", , "北极狐提示!!"  '//提示所用时间
+End Sub
+
+
+'*****************************************************************************************
+'函数名：    GET_SQL_To_Arr
+'函数功能：  获得指定SQL的查询结果，自定义连接字符串，可以连接各种数据库
+'返回值：    返回一个二维数组
+'参数1：     StrSQL   字符类型   SQL查询语句
+'参数2：     Str_coon 字符类型   数据库连接语句
+            'Str_coon = "Provider=Microsoft.JET.OLEDB.4.0;Extended Properties='Excel 8.0;HDR=yes';Data Source=" & ThisWorkbook.FullName      '//OFFICE2003
+            'Str_coon = "Provider=Microsoft.ACE.OLEDB.12.0;Extended Properties='Excel 12.0;HDR=yes';Data Source =" & ThisWorkbook.FullName     '//OFFICE2007
+            'Str_coon = "HDR=yes';Data Source =" & FileArr(i)    '//OFFICE2003，2007 通用
+'参数3：     Biaoti   可参数选   是否输出标题，默认带有标题
+'使用方法：
+'            SQLARR= GET_SQL_To_Arr(StrSQL,Str_coon,true)
+'            SQLARR(0,1)  '//数组第一行为标题行，从i=1 开始是数据
+'            Sh2.Range("A2").Resize(UBound(SQLARR, 1) + 1, UBound(SQLARR, 2) + 1) = SQLARR
+'整理：北极狐工作室 QQ：14885553
+'*****************************************************************************************
+Public Function GET_SQL_To_Arr(ByVal StrSQL As String, ByVal Str_coon As String, Optional Biaoti As Boolean = True) As Variant()
+    'On Error Resume Next    ' 改变错误处理的方式。
+    Dim CN, RS
+    Dim arr()
+    Dim I As Long
+    
+    Err.Clear
+    Set CN = CreateObject("Adodb.Connection") '//新建一个ADO连接
+    Set RS = CreateObject("adodb.recordset")
+    Rem Str_coon = "HDR=yes';Data Source=" & ThisWorkbook.FullName
+    If InStr(Str_coon, "Provider=") = 0 Then
+        If Val(Application.Version * 1) < 12 Then
+           Str_coon = "Provider=Microsoft.Jet.OLEDB.4.0;Extended Properties='Excel 8.0;" & Str_coon
+        Else
+          Str_coon = "Provider=Microsoft.ACE.OLEDB.12.0;Extended Properties='Excel 12.0;" & Str_coon
+        End If
+    End If
+    CN.CursorLocation = 3
+    CN.Open Str_coon
+    RS.Open StrSQL, CN, 1, 3
+    Rem SET RS=CN.Execute(StrSQL)
+
+    If RS.RecordCount > 0 Then '//如果找到数据
+         If Biaoti = True Then
+              ReDim arr(0 To RS.RecordCount, 0 To RS.Fields.Count - 1)
+                  For a = 0 To RS.Fields.Count - 1  '//导入标题
+                     arr(0, a) = RS.Fields(a).Name
+                  Next
+              For I = 0 To RS.RecordCount - 1  '//导入数据
+                  For a = 0 To RS.Fields.Count - 1
+                      arr(I + 1, a) = RS.Fields(a).Value
+                  Next a
+                  RS.MoveNext
+              Next
+         Else
+              ReDim arr(0 To RS.RecordCount - 1, 0 To RS.Fields.Count - 1)
+              For I = 0 To RS.RecordCount - 1  '//导入数据
+                  For a = 0 To RS.Fields.Count - 1
+                      arr(I, a) = RS.Fields(a).Value
+                  Next a
+                  RS.MoveNext
+              Next
+         End If
+     Else '//如果没有找到数据
+         If Biaoti = True Then
+              ReDim arr(0 To 0, 0 To RS.Fields.Count - 1)
+                  For a = 0 To RS.Fields.Count - 1  '//导入标题
+                     arr(0, a) = RS.Fields(a).Name
+                  Next
+         Else
+             ReDim arr(1, 1)
+             arr(0, 0) = ""
+         End If
+    End If
+    
+    If Err.Number <> 0 Then
+        MsgBox "出错了！"
+        ReDim arr(1, 1)
+        arr(0, 0) = "出错了"
+        GET_SQL_To_Arr = arr(0, 0)
+    End If
+    
+    GET_SQL_To_Arr = arr
+    
+    RS.Close
+    CN.Close  '//关闭ADO连接
+    Set RS = Nothing
+    Set CN = Nothing  '//释放内存
+End Function
+
+'*******************************************************************************************************
+'功能：    查找指定文件夹含子文件夹内所有文件名或文件夹名（含路径）
+'函数名：  FileAllArr
+'参数1：   Filename    需查找的文件夹名，不包含文件名
+'参数2：   FileFilter  需要过滤的文件名，可省略，默认为：[*.*]
+'参数3：   Liwai       剔除例外的文件名，可省略，默认为：空，一般为：ThisWorkbook.Name
+'参数4：   SubFiles    是否需要查找子文件夹内文件，可省略，默认为：true
+'参数5：   Files       是否只要文件夹名，可省略，默认为：FALSE
+'返回值：  一个字符型的数组
+'使用方法：FileArr = FileAllArr(ThisWorkbook.Path, "*.xls", ThisWorkbook.Name,false,false)
+'作者:    北极狐工作室 QQ：14885553
+'*******************************************************************************************************
+Public Function FileAllArr(ByVal Filename As String, Optional ByVal FileFilter As String = "*.*", Optional ByVal Liwai As String = "", Optional ByVal SubFiles As Boolean = True, Optional ByVal Files As Boolean = False) As String()
+    
+    Dim DIC, DID, Ke, MyName, MyFileName
+    Dim I As Integer
+    
+    Set DIC = CreateObject("Scripting.Dictionary")    '创建一个字典对象
+    Set DID = CreateObject("Scripting.Dictionary")
+    
+    Filename = Replace(Replace(Filename & "\", "\\", "\"), "\\", "\")
+    DIC.Add (Filename), ""
+    I = 0
+    Do While I < DIC.Count
+        Ke = DIC.keys   '开始遍历字典
+        If SubFiles = True Then  '//如果需要查找子文件夹
+            MyName = Dir(Ke(I), vbDirectory)    '查找目录
+            Do While MyName <> ""
+                If MyName <> "." And MyName <> ".." Then
+                    If (GetAttr(Ke(I) & MyName) And vbDirectory) = vbDirectory Then    '如果是次级目录
+                        DIC.Add (Ke(I) & MyName & "\"), ""  '就往字典中添加这个次级目录名作为一个条目
+                    End If
+                End If
+                MyName = Dir    '继续遍历寻找
+            Loop
+        End If
+        I = I + 1
+    Loop
+    Dim arrx() As String
+    I = 0
+    If Files = True Then   '//是否只输出文件夹名
+       
+        For Each Ke In DIC.keys '以查找总表所在文件夹下所有excel文件为例
+            ReDim Preserve arrx(I)
+            If Ke <> Filename Then   '//自身文件夹除外
+                arrx(I) = Ke
+                I = I + 1
+            End If
+         Next
+         FileAllArr = arrx
+    Else
+        For Each Ke In DIC.keys '以查找总表所在文件夹下所有excel文件为例
+            MyFileName = Dir(Ke & FileFilter) '过滤器：EXCEL2003为：*.xls,excel2007为：*.xlsx
+            Do While MyFileName <> ""
+               If MyFileName <> Liwai Then '排除例外文件
+                  ReDim Preserve arrx(I)
+                  arrx(I) = Ke & MyFileName
+                  I = I + 1
+               End If
+                MyFileName = Dir
+            Loop
+        Next
+        FileAllArr = arrx
+    End If
+End Function
+
+
+
+'*'****************************************************************************************************
+'函数:   GetPathFromFileName   根据全路径获得文件名
+'参数1： strFullPath  完整路径
+'参数2： kzm  true 返回字符串含扩展名,默认是：False
+'参数3： strSplitor  各级文件夹分隔符
+'作用:  从完整路径获取返回:  文件名(true带扩展名)
+'使用方法:  msgbox GetPathFromFileName("C:\windows\text.txt",true)
+'作者:    北极狐工作室 QQ：14885553
+'*'****************************************************************************************************
+Public Function GetPathFromFileName(ByVal strFullPath As String, Optional ByVal kzm As Boolean = False, Optional ByVal strSplitor As String = "\") As String
+    Dim FileName1 As String
+    Dim FNAME As String
+    FileName1 = Left$(strFullPath, InStrRev(strFullPath, strSplitor, , vbTextCompare))
+    FileName1 = Replace(strFullPath, FileName1, "")
+    If kzm = False Then
+        GetPathFromFileName = Left(FileName1, InStrRev(FileName1, ".") - 1)
+    Else
+        GetPathFromFileName = FileName1
+    End If
+End Function
+
+
+Sub 统计()
+Dim s$, name$, c%, i%, wk As Workbook, rg As Range
+s = ThisWorkbook.Path
+name = Dir(s & "\*.xls")
+    Do While name <> ""
+        If name <> ThisWorkbook.name Then
+            Set wk = Workbooks.Open(s & "" & name)
+            c = [A65536].End(3).Row - 1
+            ThisWorkbook.Sheets("统计").Activate
+            i = Cells.Find(what:="合计").Row - 1
+           
+                For Each rg In Range(Cells(3, 1), Cells(i, 1))
+                    If rg.Value = Replace(name, ".xls", "") Then
+                        rg.Offset(0, 1).Value = c
+                    End If
+                Next
+            wk.Close False
+            
+        End If
+        name = Dir
+    Loop
+End Sub
+
+
+'file cpoy
+
+'Option Explicit
+
+Dim wb, wb1 As Excel.Workbook
+Dim sh As Excel.Worksheet
+Dim s As String
+  
+Sub test()
+
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+s = "xlsx"
+Set sh = ThisWorkbook.Sheets.Add(Sheets(Sheets.Count))
+
+f = Dir(ThisWorkbook.Path & "\*" & s)
+
+Do While f <> ""
+    If f <> ThisWorkbook.Name Then
+    
+        Set wb = Workbooks.Open(ThisWorkbook.Path & "\" & f)
+        Debug.Print (ThisWorkbook.Path & "\" & f)
+        wb.Activate
+        wb.Worksheets(1).Copy sh
+'        ActiveSheet.Name = Split(wb.Name, ".")(0)
+        wb.Save
+        wb.Close
+    End If
+
+    f = Dir
+    Loop
+    
+    Application.ScreenUpdating = True
+End Sub
+
+
+
+
+
+
+
+
+
